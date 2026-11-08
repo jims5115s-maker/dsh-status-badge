@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "title": "输入框状态指示灯",
+    "description": "在输入框下方显示当前动态（空闲中、思考中、编写中、修改中），旁边是一个圆形指示灯。"
+  },
+  "status": {
+    "idle": "空闲中",
+    "thinking": "思考中",
+    "writing": "编写中",
+    "editing": "修改中",
+    "tooling": "执行工具中",
+    "working": "处理中",
+    "waiting": "等你回应"
+  }
+}

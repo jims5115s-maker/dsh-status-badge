@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "title": "輸入框狀態指示燈",
+    "description": "在輸入框下方顯示目前動態（閒置中、思考中、編寫中、修改中），旁邊是一個圓形指示燈。"
+  },
+  "status": {
+    "idle": "閒置中",
+    "thinking": "思考中",
+    "writing": "編寫中",
+    "editing": "修改中",
+    "tooling": "執行工具中",
+    "working": "處理中",
+    "waiting": "等你回應"
+  }
+}

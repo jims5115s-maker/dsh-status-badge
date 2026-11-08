@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "title": "Composer Status Badge",
+    "description": "Shows what the agent is doing right now under the composer, with a round status light."
+  },
+  "status": {
+    "idle": "Idle",
+    "thinking": "Thinking",
+    "writing": "Writing",
+    "editing": "Editing files",
+    "tooling": "Running a tool",
+    "working": "Working",
+    "waiting": "Waiting for you"
+  }
+}

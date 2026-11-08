@@ -1,0 +1,4 @@
+.runtime/
+.test/edgeprofile/
+node_modules/
+*.log

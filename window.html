@@ -1,0 +1,1425 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="utf-8" />
+    <title>Status Monitor</title>
+    <style>
+      :root {
+        --surface-alpha: 1;
+        --bg: var(--dsw-alias-bg-base, #16181c);
+        --bg2: var(--dsw-alias-bg-layer-1, #1e2126);
+        --fg: var(--dsw-alias-label-primary, #e6edf3);
+        --fg2: var(--dsw-alias-label-secondary, #9aa4af);
+        --fg3: var(--dsw-alias-label-tertiary, #6b7684);
+        --line: var(--dsw-alias-border-l1, #2c313a);
+        --green: #3fb950;
+        --cmd: #7ee787;
+        --amber: #d29922;
+        --red: #f85149;
+        --brand: #4f8cff;
+        color-scheme: dark;
+      }
+      :root[data-theme="terminal"] {
+        --bg: #05080a;
+        --bg2: #0a1410;
+        --fg: #d7f7d2;
+        --fg2: #93b39a;
+        --fg3: #5a7a66;
+        --line: #1c3a26;
+        --green: #6ee7a0;
+        --cmd: #d9ffe4;
+        --amber: #e3c46a;
+        --red: #ff7b72;
+        --brand: #22d3a7;
+        color-scheme: dark;
+      }
+      :root[data-theme="light"] {
+        --bg: #f6f7f9;
+        --bg2: #ffffff;
+        --fg: #1b1f24;
+        --fg2: #4a545f;
+        --fg3: #7a8794;
+        --line: #d5dae0;
+        --green: #1a7f37;
+        --cmd: #116329;
+        --amber: #9a6700;
+        --red: #cf222e;
+        --brand: #0969da;
+        color-scheme: light;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font: 12px/1.45 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+        color: var(--fg);
+        user-select: none;
+      }
+      #app {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        border-radius: 12px;
+        overflow: hidden;
+        clip-path: inset(0 round 12px);
+        isolation: isolate;
+        background: transparent;
+        border: 1px solid color-mix(in srgb, var(--line) calc(var(--surface-alpha, 1) * 100%), transparent);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+      }
+      #app::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, var(--bg2), var(--bg));
+        opacity: var(--surface-alpha, 1);
+        pointer-events: none;
+      }
+      #bar {
+        position: relative;
+        z-index: 1;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px 6px 12px;
+        background: rgba(255, 255, 255, 0.035);
+        border-bottom: 1px solid var(--line);
+        user-select: none;
+        cursor: default;
+      }
+      #bar:active {
+        cursor: default;
+      }
+      #title {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--fg2);
+      }
+      #ver {
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: var(--fg3);
+        font-variant-numeric: tabular-nums;
+      }
+      #sess {
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: var(--fg3);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--fg) 8%, transparent);
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #sess:empty {
+        display: none;
+      }
+      #state {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--fg2);
+      }
+      #dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--fg3);
+        box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
+      }
+      #dot[data-busy="true"] {
+        background: var(--green);
+        animation: pulse 1.6s ease-out infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.45);
+        }
+        70% {
+          box-shadow: 0 0 0 7px rgba(63, 185, 80, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
+        }
+      }
+      #ctl {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        -webkit-app-region: no-drag;
+      }
+      #bar {
+        -webkit-app-region: drag;
+      }
+      #app[data-maxed="true"] #bar {
+        -webkit-app-region: no-drag;
+      }
+      #alphabox {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 4px 0 2px;
+      }
+      #alpha {
+        width: 76px;
+        height: 3px;
+        accent-color: var(--brand);
+        cursor: pointer;
+      }
+      #alphaval {
+        font-size: 10px;
+        color: var(--fg2);
+        min-width: 32px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      #ctl button {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: var(--fg2);
+        font: inherit;
+        font-size: 11px;
+        line-height: 1;
+        padding: 5px 8px;
+        border-radius: 6px;
+        min-width: 28px;
+        cursor: pointer;
+      }
+      #ctl button:hover {
+        background: color-mix(in srgb, var(--fg) 12%, transparent);
+        color: var(--fg);
+      }
+      #ctl button[data-pin="on"] {
+        color: var(--brand);
+        background: color-mix(in srgb, var(--brand) 22%, transparent);
+      }
+      #ctl button[data-pin="on"] svg {
+        fill: currentColor;
+      }
+      #ctl button[data-close="true"]:hover {
+        background: var(--red);
+        color: #fff;
+      }
+            #app[data-maxed="true"] #body {
+        flex: 1 1 0;
+        min-height: 0;
+      }
+      #app[data-maxed="true"] #stream {
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+      }
+#body {
+        position: relative;
+        z-index: 1;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        padding: 10px 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      #body::-webkit-scrollbar {
+        width: 6px;
+      }
+      #body::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border-radius: 3px;
+      }
+      .sec {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-height: 0;
+      }
+      .sec.grow {
+        flex: 1 1 0;
+        min-height: 0;
+      }
+      .seclabel {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--fg3);
+      }
+      .work {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        min-width: 0;
+      }
+      .tool {
+        flex: none;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11.5px;
+        color: var(--brand);
+      }
+      .detail {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        color: var(--fg2);
+      }
+      .think {
+        height: 92px;
+        flex: none;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 11.5px;
+        color: var(--fg2);
+        background: color-mix(in srgb, var(--bg2) 70%, transparent);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 9px;
+      }
+      .think::-webkit-scrollbar {
+        width: 6px;
+      }
+      .think::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border-radius: 3px;
+      }
+      #stream {
+        flex: 1 1 0;
+        height: auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 7px 9px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--bg) 82%, transparent);
+        border: 1px solid var(--line);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: clamp(13px, 0.9vw, 18px);
+        line-height: 1.5;
+        color: var(--green);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      #stream::-webkit-scrollbar {
+        width: 6px;
+      }
+      #stream::-webkit-scrollbar-thumb {
+        background: var(--line);
+        border-radius: 3px;
+      }
+      .line {
+        animation: in 0.16s ease-out both;
+      }
+      .line[data-kind="seed"] {
+        opacity: 0.34;
+      }
+      .line[data-kind="cmd"] {
+        color: var(--cmd);
+        font-weight: 600;
+      }
+      .line[data-kind="out"] {
+        color: var(--fg2);
+      }
+      .line[data-kind="ok"] {
+        color: var(--green);
+      }
+      .line[data-kind="error"] {
+        color: var(--red, #ff6b6b);
+        font-weight: 600;
+      }
+      .line[data-kind="dim"] {
+        color: var(--fg3);
+      }
+      .line[data-kind="gap"] {
+        height: 6px;
+      }
+      .line[data-kind="note"] {
+        opacity: 0.6;
+        color: var(--fg2);
+      }
+      .line[data-kind="file"] {
+        color: var(--amber);
+      }
+      @keyframes in {
+        from {
+          opacity: 0;
+          transform: translateY(3px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .cursor {
+        display: inline-block;
+        width: 6px;
+        height: 10px;
+        margin-left: 2px;
+        vertical-align: -1px;
+        background: currentColor;
+        animation: blink 1s steps(1, end) infinite;
+      }
+      @keyframes blink {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0;
+        }
+      }
+      .hwline {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .hwgrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(114px, 1fr));
+        gap: 8px;
+        min-width: 0;
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        padding: 6px 7px 7px;
+        border-radius: 8px;
+        border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+        background: color-mix(in srgb, var(--fg) 4%, transparent);
+      }
+      .ctitle {
+        font-size: 10px;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: var(--fg3);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cgraph {
+        display: flex;
+        align-items: flex-end;
+        gap: 1px;
+        height: 26px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: color-mix(in srgb, var(--fg) 6%, transparent);
+      }
+      .cgraph i {
+        flex: 1;
+        min-width: 1px;
+        border-radius: 1px 1px 0 0;
+        background: var(--green);
+        opacity: 0.78;
+      }
+      .card[data-tone="warn"] .cgraph i {
+        background: var(--amber);
+      }
+      .card[data-tone="error"] .cgraph i {
+        background: var(--red);
+      }
+      .card[data-tone="brand"] .cgraph i {
+        background: var(--brand);
+      }
+        .cbig {
+          font-size: 19px;
+          font-weight: 600;
+          line-height: 1.15;
+          letter-spacing: -0.01em;
+          color: var(--fg);
+          font-variant-numeric: tabular-nums;
+        }
+      .cmodel {
+        font-size: 10px;
+        color: var(--fg2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cvalue {
+        font-size: 11px;
+        color: var(--fg);
+        font-variant-numeric: tabular-nums;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .elapsed {
+      .elapsed {
+        margin-left: auto;
+        color: var(--fg3);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        font-size: 10px;
+        color: var(--fg3);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="bar">
+        <span id="title">Live monitor</span>
+        <span id="ver">v—</span>
+        <span id="state"><i id="dot" data-busy="false"></i><span id="statelabel">idle</span></span>
+        <div id="ctl">
+          
+          <button id="btn-reload" type="button" title="重新整理（切換對話後按一下）">⟳</button>
+          <button id="btn-pin" type="button" title="釘選（穿透 + 不可拖動）" data-pin="off"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z"/><path d="M12 14v7"/></svg></button>
+          <button id="btn-max" type="button" title="Maximize">⛶</button>
+          <button id="btn-close" type="button" data-close="true" title="Close">✕</button>
+        </div>
+      </div>
+      <div id="body">
+        <div class="sec" id="sec-work">
+          <span class="seclabel">目前工作</span>
+          <div class="work"><span class="tool" id="tool">—</span><span class="detail" id="detail"></span><span class="elapsed" id="elapsed"></span></div>
+        </div>
+        <div class="sec" id="sec-think">
+          <span class="seclabel">思考</span>
+          <div class="think" id="think">（這一輪還沒有思考內容）</div>
+        </div>
+
+        <div class="sec grow" id="sec-code">
+          <span class="seclabel">程式碼流</span>
+          <div id="stream"><span class="cursor"></span></div>
+        </div>
+        <div class="sec" id="sec-hw">
+          <span class="seclabel">硬體</span>
+          <div class="hwline">
+            <div class="hwgrid" id="hwgrid">
+              <div class="card" id="c-cpu"><span class="ctitle">CPU</span><div class="cgraph" id="g-cpu"></div><span class="cmodel" id="n-cpu">—</span><span class="cvalue" id="x-cpu">—</span></div>
+              <div class="card" data-tone="brand" id="c-mem"><span class="ctitle">記憶體</span><div class="cgraph" id="g-mem"></div><span class="cmodel" id="n-mem">—</span><span class="cvalue" id="x-mem">—</span></div>
+              <div id="gpuroom" style="display: contents"></div>
+              <div class="card" data-tone="warn" id="c-disk"><span class="ctitle">磁碟</span><div class="cgraph" id="g-disk"></div><span class="cmodel" id="n-disk">—</span><span class="cvalue" id="x-disk">—</span></div>
+              <div class="card" data-tone="ok" id="c-balance"><span class="ctitle">餘額</span><span class="cbig" id="v-balance">—</span><span class="cmodel" id="n-spend">本會話 —</span><span class="cvalue" id="x-tokens">— tok</span></div>
+            </div>
+            <div class="facts" id="hwfacts"></div>
+            <div class="facts" id="facts"></div>
+          </div>
+
+        </div>
+      </div>        </div>
+      </div>
+    </div>
+    <script>
+      const LABELS = {
+        idle: '閒置中',
+        thinking: '思考中',
+        writing: '編寫中',
+        editing: '修改中',
+        tooling: '執行工具中',
+        working: '處理中',
+        waiting: '等你回應',
+      };
+      const BLOCKS = [
+        [
+          { t: '$ git status --short --branch', k: 'cmd' },
+          { t: '## main...origin/main [ahead 3]  example.com/plugins/dsh-status-badge', k: 'dim' },
+          { t: ' M lib/index.js            bridge proxy routes, gpu sampler, live state store, metrics snapshot', k: 'out' },
+          { t: ' M lib/client.js           always-on pusher, 250ms cadence, window mode, token refresh', k: 'out' },
+          { t: '?? test/render.test.mjs     9 status fixtures, feed lines, stream cadence assertions', k: 'out' },
+          { t: '?? window.html              frameless monitor surface, three panes, title bar controls', k: 'out' },
+        ],
+        [
+          { t: '$ node --check lib/index.js && node --check lib/client.js && node --check lib/window.html', k: 'cmd' },
+          { t: '  ok  lib/index.js       14.2ms   0 errors   0 warnings   syntax esm, target node 24.21', k: 'ok' },
+          { t: '  ok  lib/client.js      11.8ms   0 errors   0 warnings   syntax esm, target chrome 138', k: 'ok' },
+          { t: '  ok  window.html         4.1ms   0 errors   0 warnings   inline script block, strict mode', k: 'ok' },
+          { t: '  done  3 files checked, 0 problems, 0 fixes applied, 30.1ms total', k: 'dim' },
+        ],
+        [
+          { t: '$ pnpm test --filter @local/status-badge --reporter=verbose --coverage=false', k: 'cmd' },
+          { t: '  PASS  test/render.test.mjs (1.24s)   node v24.21.0   esm loader   worker 1/1', k: 'ok' },
+          { t: '    ok  9 status fixtures - idle, thinking, writing, editing, tooling, working, waiting', k: 'ok' },
+          { t: '    ok  feed lines - thinking 1400 chars, answer 800 chars, tool preview 40 rows', k: 'ok' },
+          { t: '    ok  stream cadence - tick 12ms, step len/4, hold 0, idle threshold 4, limit 200 rows', k: 'ok' },
+          { t: '    ok  window routes - open, move, restore, maximize, opacity, state, diag round trip', k: 'ok' },
+          { t: '  Tests  12 passed (12)     Time  1.24s     Snapshots  0     Coverage  91.4% statements', k: 'dim' },
+        ],
+        [
+          { t: '$ curl -s http://127.0.0.1:8080/status-badge/metrics | jq \'{cpu: .cpuPct, gpu: .gpu.list, mem: .memUsed}\'', k: 'cmd' },
+          { t: '  { "cpu": 23.4, "gpu": [ { "pct": 50, "name": "RTX 5080", "memUsed": 8090812416 } ], "mem": 11176345600 }', k: 'out' },
+          { t: '  http 200   content-type application/json   cache-control no-store   14.8ms round trip', k: 'dim' },
+        ],
+        [
+          { t: '$ git diff --stat lib/index.js lib/client.js window.html test/render.test.mjs', k: 'cmd' },
+          { t: ' lib/index.js            | 42 +++++++++++++++++++++++-------------------  18 insertions', k: 'out' },
+          { t: ' lib/client.js           | 18 +++++++++++++------                         12 insertions', k: 'out' },
+          { t: ' window.html             | 96 ++++++++++++++++++++++++++++++++++++++++-----  61 insertions', k: 'out' },
+          { t: ' test/render.test.mjs    |  8 +++++---                                     5 insertions', k: 'out' },
+          { t: ' 4 files changed, 121 insertions(+), 35 deletions(-)   working tree otherwise clean', k: 'dim' },
+        ],
+        [
+          { t: '$ rg -n "setWindowOpenHandler|__startStatusBridge|setOpacity|skipTaskbar" lib/main.js', k: 'cmd' },
+          { t: ' 6863: view.webContents.setWindowOpenHandler(({ url, frameName }) => { return { action: "deny" }; });', k: 'out' },
+          { t: ' 7012: async function __startStatusBridge() { const srv = http.createServer(async (req, res) => {', k: 'out' },
+          { t: ' 7031: skipTaskbar: true, frame: false, transparent: true, backgroundColor: "#00000000", width: 720,', k: 'out' },
+          { t: ' 7104: if (u.pathname === "/opacity") { __statusWin.setOpacity(clamp(v)); return reply({ ok: true }); }', k: 'out' },
+        ],
+        [
+          { t: '  stream ready  ·  rows 200  ·  tick 12ms  ·  limit 200  ·  font clamp(13px, 0.9vw, 18px)  ·  wrap anywhere', k: 'ok' },
+        ],
+      ];
+
+      const LIMITS = { simple: 200, normal: 200, full: 200 };
+      let LIMIT = 200;
+      let PACE = 'smooth';
+      const THEME_PARAM = new URLSearchParams(location.search).get('theme');
+      if (THEME_PARAM === 'dark' || THEME_PARAM === 'terminal' || THEME_PARAM === 'light') {
+        document.documentElement.dataset.theme = THEME_PARAM;
+      }
+
+      const HOST_BASE = (new URLSearchParams(location.search).get("origin") || "").replace(/\/$/, "");
+      const streamBox = document.getElementById('stream');
+      const think = document.getElementById('think');
+      const toolEl = document.getElementById('tool');
+      const elapsedEl = document.getElementById('elapsed');
+      const detailEl = document.getElementById('detail');
+      const dotEl = document.getElementById('dot');
+      const stateEl = document.getElementById('statelabel');
+      const factsEl = document.getElementById('facts');
+      const alphaEl = document.getElementById('alpha');
+      const alphaVal = document.getElementById('alphaval');
+      const btnReload = document.getElementById('btn-reload');
+      const btnPin = document.getElementById('btn-pin');
+      const btnMax = document.getElementById('btn-max');
+      const btnClose = document.getElementById('btn-close');
+      const cursor = streamBox.querySelector('.cursor');
+
+      const rec = { rows: [], pending: [], seen: new Set(), target: '', typed: '', kind: '', hold: 0, idle: 0, seq: 0, nodes: [] };
+      let lastAlpha = 1;
+      let liveRunning = false;
+
+      function ingest(lines) {
+        if (!Array.isArray(lines)) return;
+        const fresh = [];
+        for (const entry of lines) {
+          const object = entry !== null && typeof entry === 'object';
+          const value = object ? String(entry.text || '') : String(entry || '');
+          if (value.trim() === '' || rec.seen.has(value)) continue;
+          rec.seen.add(value);
+          fresh.push({ text: value, kind: object && entry.kind ? String(entry.kind) : 'real' });
+        }
+        if (fresh.length > 40) {
+          for (const item of fresh) pushRow(item.text, item.kind);
+          paint();
+          trimSeen();
+          return;
+        }
+        if (PACE === 'instant' || flushOnce) {
+          flushOnce = false;
+          for (const item of fresh) pushRow(item.text, item.kind);
+          if (fresh.length > 0) paint();
+          trimSeen();
+          return;
+        }
+        for (const item of fresh) rec.pending.push(item);
+        if (rec.pending.length > 120) rec.pending = rec.pending.slice(-120);
+        trimSeen();
+      }
+
+      function trimSeen() {
+        while (rec.seen.size > 3000) {
+          const oldest = rec.seen.values().next().value;
+          if (oldest === void 0) break;
+          rec.seen.delete(oldest);
+        }
+      }
+
+      let flushOnce = false;
+      let lastFlow = '';
+
+      function applyFlow(flow, pace) {
+        const mode = flow === 'simple' || flow === 'normal' ? flow : 'full';
+        const nextLimit = LIMITS[mode] || 200;
+        const changed = mode !== lastFlow;
+        lastFlow = mode;
+        LIMIT = nextLimit;
+        if (changed) {
+          // A mode switch rewrites the whole pane from the next payload instead of
+          // keeping rows the new mode would never have produced.
+          flushOnce = true;
+          rec.rows.length = 0;
+          rec.pending.length = 0;
+          rec.target = '';
+          rec.typed = '';
+          rec.kind = '';
+          rec.seen.clear();
+          resetStream();
+          paint();
+        } else if (rec.rows.length > LIMIT) {
+          rec.rows.splice(0, rec.rows.length - LIMIT);
+          paint();
+        }
+        PACE = pace === 'instant' ? 'instant' : pace === 'normal' ? 'normal' : 'smooth';
+        if (PACE === 'instant' && rec.pending.length > 0) {
+          while (rec.pending.length > 0) {
+            const row = rec.pending.shift();
+            pushRow(row.kind === 'gap' ? '' : row.text, row.kind);
+          }
+          paint();
+        }
+      }
+
+      let blockDeck = [];
+
+      function nextBlock() {
+        if (blockDeck.length === 0) {
+          blockDeck = BLOCKS.slice();
+          for (let i = blockDeck.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const swap = blockDeck[i];
+            blockDeck[i] = blockDeck[j];
+            blockDeck[j] = swap;
+          }
+        }
+        return blockDeck.pop();
+      }
+
+      function appendBlock() {
+        const block = nextBlock();
+        for (const line of block) pushRow(line.t, line.k);
+        pushRow('', 'gap');
+      }
+
+      function seedLine() {
+        if (rec.idle < 4) {
+          rec.idle += 1;
+          return;
+        }
+        rec.idle = 0;
+        const block = nextBlock();
+        for (const line of block) rec.pending.push({ text: line.t, kind: line.k });
+        rec.pending.push({ text: '', kind: 'gap' });
+      }
+
+      function pushRow(text, kind) {
+        rec.seq += 1;
+        rec.rows.push({ id: rec.seq, text: text, kind: kind });
+        if (rec.rows.length > LIMIT) rec.rows.splice(0, rec.rows.length - LIMIT);
+      }
+
+      function fillToViewport() {
+        let guard = 0;
+        paint();
+        while (guard < 400 && streamBox.scrollHeight <= streamBox.clientHeight + 2) {
+          guard += 1;
+          appendBlock();
+          paint();
+        }
+        paint();
+        streamBox.scrollTop = streamBox.scrollHeight;
+      }
+
+      function tick() {
+        if (liveRunning !== true) return;
+        if (rec.pending.length >= (PACE === 'instant' ? 1 : 6)) {
+          if (rec.target !== '') {
+            pushRow(rec.target, rec.kind);
+            rec.target = '';
+            rec.typed = '';
+            rec.kind = '';
+          }
+          while (rec.pending.length > 0) {
+            const row = rec.pending.shift();
+            pushRow(row.kind === 'gap' ? '' : row.text, row.kind);
+          }
+          paint();
+        }
+        if (rec.target === '') {
+          if (rec.pending.length > 0) {
+            const next = rec.pending.shift();
+            if (next.kind === 'gap') {
+              pushRow('', 'gap');
+              paint();
+              return;
+            }
+            rec.target = next.text;
+            rec.typed = '';
+            rec.kind = next.kind;
+            rec.idle = 0;
+          } else if (liveFirst !== true) {
+            seedLine();
+            if (rec.target === '') return;
+          } else {
+            return;
+          }
+        }
+        if (rec.target === '') return;
+        if (rec.typed.length < rec.target.length) {
+          const divisor = PACE === 'smooth' ? 8 : PACE === 'normal' ? 4 : 2;
+          const step = Math.max(1, Math.ceil(rec.target.length / divisor));
+          rec.typed = rec.target.slice(0, rec.typed.length + step);
+          paint();
+          return;
+        }
+        pushRow(rec.target, rec.kind);
+        rec.target = '';
+        rec.typed = '';
+        rec.kind = '';
+        rec.hold = 0;
+        paint();
+      }
+
+      let painted = 0;
+      let paintedFirst = -1;
+      let liveEl = null;
+      let lastHeight = 0;
+
+      function resetStream() {
+        streamBox.replaceChildren();
+        if (cursor !== null) streamBox.appendChild(cursor);
+        painted = 0;
+        paintedFirst = -1;
+        liveEl = null;
+        lastHeight = 0;
+      }
+
+      function paint() {
+        const firstId = rec.rows.length > 0 ? rec.rows[0].id : -1;
+        if (rec.rows.length < painted || (painted > 0 && firstId !== paintedFirst)) {
+          if (painted > 0 && firstId > paintedFirst) {
+            const drop = firstId - paintedFirst;
+            for (let i = 0; i < drop; i += 1) {
+              const first = streamBox.firstElementChild;
+              if (first === null || first === liveEl || first.className === 'cursor') break;
+              first.remove();
+            }
+            painted = Math.max(0, painted - drop);
+          } else {
+            resetStream();
+          }
+        }
+        for (let i = painted; i < rec.rows.length; i += 1) {
+          const row = rec.rows[i];
+          const line = document.createElement('div');
+          line.className = 'line';
+          line.dataset.kind = row.kind;
+          line.textContent = row.text;
+          streamBox.appendChild(line);
+        }
+        painted = rec.rows.length;
+        paintedFirst = firstId;
+        if (rec.typed !== '') {
+          if (liveEl === null) {
+            liveEl = document.createElement('div');
+            liveEl.className = 'line';
+            const typedEl = document.createElement('span');
+            typedEl.className = 'typed';
+            liveEl.appendChild(typedEl);
+            if (cursor !== null) liveEl.appendChild(cursor);
+            streamBox.appendChild(liveEl);
+          }
+          liveEl.dataset.kind = rec.kind || 'real';
+          liveEl.firstChild.textContent = rec.typed;
+          if (cursor !== null && liveEl.lastChild !== cursor) liveEl.appendChild(cursor);
+        } else if (liveEl !== null) {
+          liveEl.remove();
+          liveEl = null;
+          if (cursor !== null) streamBox.appendChild(cursor);
+        }
+        lastHeight = streamBox.scrollHeight;
+        streamBox.scrollTop = lastHeight;
+      }
+
+      function fmtBytes(bytes) {
+        const value = Number.isFinite(bytes) ? bytes : 0;
+        if (value >= 1024 * 1024 * 1024) return (value / 1073741824).toFixed(1) + ' GB';
+        if (value >= 1048576) return (value / 1048576).toFixed(0) + ' MB';
+        return (value / 1024).toFixed(0) + ' KB';
+      }
+
+      function fmtUptime(seconds) {
+        const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+        const d = Math.floor(total / 86400);
+        const h = Math.floor((total % 86400) / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
+      }
+
+      function tone(percent) {
+        if (percent >= 85) return 'error';
+        if (percent >= 60) return 'warn';
+        return 'ok';
+      }
+
+      const hwSeries = { cpu: [], mem: [], disk: [], gpu: {} };
+
+      function pushSeries(key, value) {
+        const list = hwSeries[key];
+        if (!Array.isArray(list)) return [];
+        list.push(Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0)));
+        while (list.length > 40) list.shift();
+        return list;
+      }
+
+      function pushGpuSeries(index, value) {
+        const key = String(index);
+        if (!Array.isArray(hwSeries.gpu[key])) hwSeries.gpu[key] = [];
+        return pushSeries2(hwSeries.gpu[key], value);
+      }
+
+      function pushSeries2(list, value) {
+        list.push(Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0)));
+        while (list.length > 40) list.shift();
+        return list;
+      }
+
+      function paintGraph(graph, series) {
+        const data = Array.isArray(series) && series.length > 0 ? series : [0];
+        graph.replaceChildren(
+          ...data.map((value) => {
+            const bar = document.createElement("i");
+            bar.style.height = Math.max(2, (Math.max(0, Math.min(100, value)) / 100) * 26).toFixed(1) + "px";
+            return bar;
+          }),
+        );
+      }
+
+      function setCard(id, percent, model, value, series) {
+        const card = document.getElementById("c-" + id);
+        const graph = document.getElementById("g-" + id);
+        if (card === null || graph === null) return;
+        const p = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+        if (card.dataset.tone !== "brand") card.dataset.tone = tone(p);
+        const modelEl = document.getElementById("n-" + id);
+        const valueEl = document.getElementById("x-" + id);
+        if (modelEl !== null) {
+          modelEl.textContent = model || "—";
+          modelEl.title = model || "";
+        }
+        if (valueEl !== null) valueEl.textContent = value || "—";
+        paintGraph(graph, series);
+      }
+      const viewState = {
+        pane: { work: true, think: true, code: true, hardware: true },
+        hw: { cpu: true, mem: true, gpu: true, disk: true, balance: true },
+      };
+      let lastBalanceAt = 0;
+
+      function show(node, on) {
+        if (node === null) return;
+        node.style.display = on === true ? "" : "none";
+      }
+
+      function applyView(view) {
+        if (view === null || typeof view !== "object") return;
+        if (view.pane && typeof view.pane === "object") {
+          viewState.pane = Object.assign({}, viewState.pane, view.pane);
+        }
+        if (view.hw && typeof view.hw === "object") {
+          viewState.hw = Object.assign({}, viewState.hw, view.hw);
+        }
+        if (typeof view.theme === "string" && view.theme !== "") {
+          document.documentElement.dataset.theme = view.theme;
+        }
+        show(document.getElementById("sec-work"), viewState.pane.work);
+        show(document.getElementById("sec-think"), viewState.pane.think);
+        show(document.getElementById("sec-code"), viewState.pane.code);
+        show(document.getElementById("sec-hw"), viewState.pane.hardware);
+        show(document.getElementById("c-cpu"), viewState.hw.cpu);
+        show(document.getElementById("c-mem"), viewState.hw.mem);
+        show(document.getElementById("c-disk"), viewState.hw.disk);
+        show(document.getElementById("c-balance"), viewState.hw.balance);
+        const room = document.getElementById("gpuroom");
+        if (room !== null) {
+          for (const card of room.children) show(card, viewState.hw.gpu);
+        }
+        const key = JSON.stringify(viewState);
+        if (key !== lastViewKey) {
+          lastViewKey = key;
+        }
+      }
+      let lastViewKey = "";
+
+      function renderUsage(usage) {
+        const el = document.getElementById("x-tokens");
+        const spendEl = document.getElementById("n-spend");
+        if (el === null) return;
+        const view = usage !== null && typeof usage === "object" ? usage : {};
+        const total = Number.isFinite(view.total) ? view.total : 0;
+        el.textContent = total > 0 ? compact(total) + " tok" : "— tok";
+        if (spendEl !== null && spendEl.dataset.signedOut !== "true") {
+          const spend = Number.isFinite(view.spend) ? view.spend : 0;
+          spendEl.textContent = spend > 0 ? "本會話 ¥" + spend.toFixed(spend < 0.01 ? 4 : 2) : "本會話 —";
+        }
+      }
+
+      function compact(value) {
+        const n = Number(value) || 0;
+        if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1) + "M";
+        if (n >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k";
+        return String(Math.round(n));
+      }
+
+      async function pullBalance() {
+        if (Date.now() - lastBalanceAt < 60000) return;
+        lastBalanceAt = Date.now();
+        try {
+          const response = await fetch(HOST_BASE + "/status-badge/balance", { cache: "no-store" });
+          if (!response.ok) return;
+          const data = await response.json();
+          const big = document.getElementById("v-balance");
+          const spend = document.getElementById("n-spend");
+          if (big !== null) {
+            if (data && data.ok === true && data.wallet) {
+              const symbol = data.wallet.currency === "USD" ? "$" : "¥";
+              const amount = Number(data.wallet.balance);
+              big.textContent = symbol + (Number.isFinite(amount) ? amount.toFixed(2) : data.wallet.balance);
+            } else {
+              big.textContent = "—";
+              if (data && data.reason === "signed-out" && spend !== null) { spend.textContent = "未登入帳號"; spend.dataset.signedOut = "true"; }
+            }
+          }
+        } catch {
+          /* host may be restarting */
+        }
+      }
+
+      let liveIdle = false;
+      let liveSeenAt = 0;
+      let liveBusy = false;
+      let liveFirst = false;
+      let wasRunning = false;
+      let audioCtx = null;
+
+      function beep() {
+        try {
+          if (window.__sbSound === false) return;
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx === void 0) return;
+          audioCtx = audioCtx || new Ctx();
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(740, now);
+          osc.frequency.setValueAtTime(988, now + 0.1);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.28);
+        } catch {
+        }
+      }
+
+      /** How stale the snapshot on screen is, measured from the host's receive time. */
+      function latencyOf(data) {
+        const received = Number(data.receivedAt) || 0;
+        const pushes = Number(data.pushes) || 0;
+        if (received === 0) return '推送 —';
+        const age = Math.max(0, Date.now() - received);
+        return '推送 ' + pushes + ' · 上次 ' + (age >= 1000 ? (age / 1000).toFixed(1) + 's' : age + 'ms') + ' 前';
+      }
+
+      async function pullLive() {
+        if (liveBusy === true) return;
+        if (liveIdle && Date.now() - liveSeenAt < 900) return;
+        liveBusy = true;
+        try {
+          const response = await fetch(HOST_BASE + '/status-badge/live', { cache: 'no-store' });
+          if (!response.ok) return;
+          const data = await response.json();
+          liveSeenAt = Date.now();
+          liveIdle = data.running !== true && (data.status === 'idle' || data.status === void 0);
+          if (wasRunning === true && liveIdle === true) beep();
+          wasRunning = data.running === true;
+          if (data.tokens && typeof data.tokens === 'object') {
+            for (const [name, value] of Object.entries(data.tokens)) {
+              if (typeof value === 'string' && value !== '') document.documentElement.style.setProperty(name, value);
+            }
+          }
+          const label = LABELS[data.status] || data.status || 'idle';
+          stateEl.textContent = label;
+          dotEl.dataset.busy = data.status === 'idle' ? 'false' : 'true';
+          toolEl.textContent = data.tool || '—';
+          detailEl.textContent = data.detail || '';
+          liveRunning = data.running === true;
+          const thinking = typeof data.thinking === 'string' ? data.thinking : '';
+          elapsedEl.textContent = Number.isFinite(data.elapsed) && data.elapsed > 0 ? fmtUptime(data.elapsed) : '';
+          think.textContent = thinking !== '' ? thinking : '（這一輪還沒有思考內容）';
+          think.scrollTop = think.scrollHeight;
+          applyView(data.view);
+          applyFlow(data.flow, data.pace);
+          if (liveFirst !== true && Array.isArray(data.lines) && data.lines.length > 0) {
+            // Whatever the page painted before the first answer is demo filler.
+            liveFirst = true;
+            rec.rows.length = 0;
+            rec.pending.length = 0;
+            rec.target = '';
+            rec.typed = '';
+            rec.kind = '';
+            rec.seen.clear();
+            resetStream();
+            paint();
+          }
+          renderUsage(data.usage);
+          pullBalance();
+          ingest(data.lines);
+          const stats = data.stats || {};
+          const paths = Array.isArray(data.paths) ? data.paths : [];
+          factsEl.replaceChildren(
+            ...[
+              '節點 ' + (stats.nodes || 0),
+              '工具 ' + (stats.tools || 0),
+              '行 ' + rec.rows.length,
+              '檔案 ' + paths.length,
+              latencyOf(data),
+            ].map((value) => {
+              const span = document.createElement('span');
+              span.textContent = value;
+              return span;
+            }),
+            ...(paths.length === 0
+              ? []
+              : [
+                  (() => {
+                    const span = document.createElement('span');
+                    span.textContent = paths.slice(-3).join(' · ');
+                    return span;
+                  })(),
+                ]),
+          );
+        } catch {
+          /* the host may be restarting */
+        } finally {
+          liveBusy = false;
+        }
+      }
+
+      function renderGpu(list) {
+        const room = document.getElementById("gpuroom");
+        if (room === null) return;
+        const cards = list.length > 0 ? list : [{ pct: null, name: "" }];
+        if (room.children.length !== cards.length) {
+          room.replaceChildren(
+            ...cards.map((gpu, index) => {
+              const card = document.createElement("div");
+              card.className = "card";
+              card.id = "c-gpu" + index;
+              const title = document.createElement("span");
+              title.className = "ctitle";
+              title.textContent = cards.length > 1 ? "GPU " + index : "GPU";
+              const graph = document.createElement("div");
+              graph.className = "cgraph";
+              graph.id = "g-gpu" + index;
+              const modelEl = document.createElement("span");
+              modelEl.className = "cmodel";
+              modelEl.id = "n-gpu" + index;
+              const valueEl = document.createElement("span");
+              valueEl.className = "cvalue";
+              valueEl.id = "x-gpu" + index;
+              card.append(title, graph, modelEl, valueEl);
+              return card;
+            }),
+          );
+        }
+        cards.forEach((gpu, index) => {
+          const value = Number.isFinite(gpu.pct) ? gpu.pct : 0;
+          const memGb = Number.isFinite(gpu.memUsed) && gpu.memUsed > 0 ? (gpu.memUsed / 1073741824).toFixed(1) + " GB" : "";
+          setCard(
+            "gpu" + index,
+            value,
+            gpu.name || "",
+            Number.isFinite(gpu.pct) ? value.toFixed(0) + "%" + (memGb !== "" ? " · " + memGb : "") : "—",
+            pushGpuSeries(index, value),
+          );
+        });
+      }
+      function shortCpu(model) {
+        if (typeof model !== 'string') return '';
+        return model
+          .replace(/\(R\)|\(TM\)|CPU|Processor|\d+-Core/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 20);
+      }
+
+      function shortGpu(name) {
+        if (typeof name !== 'string') return '';
+        return name
+          .replace(/NVIDIA GeForce|AMD Radeon|Intel|Graphics/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 18);
+      }
+
+      function pullMetricsOnce(data) {
+        const verEl = document.getElementById("ver");
+        if (verEl !== null && typeof data.version === "string" && data.version !== "") {
+          verEl.textContent = "v" + data.version;
+        }
+        const cpu = Number.isFinite(data.cpuPct) ? data.cpuPct : 0;
+        setCard("cpu", cpu, shortCpu(data.cpuModel), cpu.toFixed(0) + "%", pushSeries("cpu", cpu));
+        const memPct = data.memTotal > 0 ? (data.memUsed / data.memTotal) * 100 : 0;
+        const gbUsed = data.memUsed > 0 ? (data.memUsed / 1073741824).toFixed(1) : "0";
+        const gbTotal = data.memTotal > 0 ? (data.memTotal / 1073741824).toFixed(1) : "0";
+        setCard("mem", memPct, gbUsed + "/" + gbTotal + " GB", memPct.toFixed(0) + "%", pushSeries("mem", memPct));
+        const gpuList = data.gpu !== null && typeof data.gpu === "object" && Array.isArray(data.gpu.list) ? data.gpu.list : [];
+        renderGpu(gpuList);
+        const slow = data.slow !== null && typeof data.slow === "object" ? data.slow : null;
+        if (slow !== null && slow.diskTotal > 0) {
+          const used = slow.diskTotal - slow.diskFree;
+          const diskPct = (used / slow.diskTotal) * 100;
+          const freeGb = (slow.diskFree / 1073741824).toFixed(0);
+          setCard("disk", diskPct, (slow.diskId || "C:") + " 剩 " + freeGb + " GB", diskPct.toFixed(0) + "%", pushSeries("disk", diskPct));
+        }
+        hwFacts(data);
+      }
+
+      async function pullMetrics() {
+        void readWindowState();
+        try {
+          const response = await fetch(HOST_BASE + "/status-badge/metrics", { cache: "no-store" });
+          if (!response.ok) return;
+          const data = await response.json();
+          pullMetricsOnce(data);
+        } catch {
+        }
+      }
+      function hwFacts(data) {
+        const box = document.getElementById('hwfacts');
+        const load = Array.isArray(data.loadavg) ? data.loadavg.map((v) => v.toFixed(2)).join(' ') : '';
+        const slow = data.slow !== null && typeof data.slow === 'object' ? data.slow : null;
+        const net = slow !== null && Number.isFinite(slow.netIn) ? '↓ ' + (slow.netIn / 1048576).toFixed(1) + ' MB/s' : '';
+        const batt = slow !== null && Number.isFinite(slow.battery) ? '電池 ' + slow.battery + '%' : '';
+        const procs = slow !== null && Array.isArray(slow.procs) ? slow.procs.slice(0, 3).map((one) => String(one.name || '') + ' ' + (Number(one.mem) / 1048576).toFixed(0) + 'M').join('  ') : '';
+        const items = [
+          '運行 ' + fmtUptime(data.uptimeSec),
+          load !== '' ? 'load ' + load : '',
+          net,
+          batt,
+          procs,
+          data.gpu && data.gpu.name ? String(data.gpu.name).slice(0, 26) : '',
+          data.cpuModel ? data.cpuModel.replace(/\s+/g, ' ').slice(0, 42) : '',
+        ].filter((item) => item !== '');
+        box.replaceChildren(
+          ...items.map((value) => {
+            const span = document.createElement('span');
+            span.textContent = value;
+            return span;
+          }),
+        );
+      }
+
+      let maxed = false;
+      let restore = null;
+
+      function setAlpha(pct) {
+        const raw = Number(pct);
+        const value = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : 100;
+        document.documentElement.style.setProperty('--surface-alpha', String(value / 100));
+        try { window.localStorage.setItem('sb.alpha', String(value)); } catch {}
+        if (alphaEl !== null) alphaEl.value = String(value);
+        if (alphaVal !== null) alphaVal.textContent = value + '%';
+      }
+
+      window.__setAlpha = setAlpha;
+      try {
+        const savedAlpha = window.localStorage.getItem('sb.alpha');
+        if (savedAlpha !== null && savedAlpha !== '') setAlpha(Number(savedAlpha));
+      } catch {}
+      function applyMaxed(on) {
+        const appBox = document.getElementById("app");
+        if (appBox) appBox.dataset.maxed = on === true ? "true" : "false";
+      }
+
+      function localAct(action) {
+        if (action === 'maximize') {
+          maxed = !maxed;
+          if (maxed) {
+            restore = { x: window.screenX, y: window.screenY, w: window.outerWidth, h: window.outerHeight };
+            window.moveTo(0, 0);
+            window.resizeTo(screen.availWidth, screen.availHeight);
+          } else if (restore !== null) {
+            window.moveTo(restore.x, restore.y);
+            window.resizeTo(restore.w, restore.h);
+            restore = null;
+          }
+          btnMax.textContent = maxed ? '❐' : '⛶';
+          btnMax.title = maxed ? 'Restore' : 'Maximize';
+          return { ok: true, maxed: maxed };
+        }
+        if (action === 'close') {
+          window.close();
+          return { ok: true };
+        }
+        return { ok: false };
+      }
+
+      let pinned = false;
+
+      function paintPin(on) {
+        pinned = on === true;
+        if (btnPin === null) return;
+        btnPin.dataset.pin = pinned ? 'on' : 'off';
+        btnPin.title = pinned ? '已釘選（滑鼠穿透中，點此解除）' : '釘選（滑鼠穿透 + 不可拖動）';
+      }
+
+      async function togglePin() {
+        const next = !pinned;
+        paintPin(next);
+        const flag = next ? '1' : '0';
+        await postWindow('/status-badge/window/ctl?path=pinpos&value=' + flag, null);
+        await postWindow('/status-badge/window/ctl?path=passthrough&value=' + flag, null);
+      }
+
+      async function act(action) {
+        try {
+          const response = await fetch(HOST_BASE + '/status-badge/window/action', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action }),
+          });          const data = await response.json();
+          if (data && data.ok) {
+            if (action === 'maximize') {
+              applyMaxed(data.maxed === true);
+              btnMax.textContent = data.maxed ? '❐' : '⛶';
+              btnMax.title = data.maxed ? 'Restore' : 'Maximize';
+            }
+            if (action === 'close') window.close();
+            return data;
+          }
+          return localAct(action);
+        } catch (error) {
+          return localAct(action);
+        }
+      }
+
+      const barEl = document.getElementById('bar');
+      let dragState = null;
+
+      async function readWindowState() {
+        try {
+          const response = await fetch(HOST_BASE + '/status-badge/window/state');
+          const data = await response.json();
+          if (data !== null && typeof data === 'object') {
+            lockOn = data.pinned === true && data.passthrough === true;
+        paintPin(lockOn);
+          }
+          return data !== null && typeof data === 'object' ? data : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function paintSession(tag) {
+        const el = document.getElementById('sess');
+        if (el === null) return;
+        el.textContent = '';
+      }
+
+      async function postWindow(path, body) {
+        try {
+          const response = await fetch(HOST_BASE + path, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body || {}),
+          });
+          return await response.json();
+        } catch {
+          return null;
+        }
+      }
+
+      barEl.addEventListener('mousedown', async (event) => {
+        if (event.button !== 0) return;
+        if (event.target.closest('#ctl')) return;
+        event.preventDefault();
+        const startX = event.screenX;
+        const startY = event.screenY;
+        const started = await postWindow('/status-badge/window/dragstart', { x: startX, y: startY });
+        if (started === null || started.ok !== true) return;
+        const bounds = started.bounds && typeof started.bounds === 'object' ? started.bounds : null;
+        dragState = {
+          startX: startX,
+          startY: startY,
+          baseX: bounds ? bounds.x : 320,
+          baseY: bounds ? bounds.y : 240,
+          last: 0,
+        };
+      });
+
+      window.addEventListener('mousemove', (event) => {
+        if (dragState === null) return;
+        const dx = event.screenX - dragState.startX;
+        const dy = event.screenY - dragState.startY;
+        const now = Date.now();
+        if (now - dragState.last < 33) return;
+        dragState.last = now;
+        postWindow('/status-badge/window/move', { x: dragState.baseX + dx, y: dragState.baseY + dy });
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (dragState !== null) {
+          dragState = null;
+          fetch(HOST_BASE + '/status-badge/window/ctl?path=snap').catch(() => {});
+        }
+      });
+      window.addEventListener('blur', () => {
+        dragState = null;
+      });
+
+      setAlpha(100);
+      let hoveringBar = false;
+      let lockOn = false;
+      window.addEventListener('mousemove', (event) => {
+        const inBar = event.clientY <= 42;
+        if (inBar === hoveringBar) return;
+        hoveringBar = inBar;
+        if (lockOn !== true) return;
+        void postWindow('/status-badge/window/ctl?path=passthrough&value=' + (inBar ? '0' : '1'), null);
+      });
+
+      if (btnReload !== null) btnReload.addEventListener('click', () => window.location.reload());
+      if (btnPin !== null) btnPin.addEventListener('click', () => void togglePin());
+      btnMax.addEventListener('click', () => act('maximize'));
+      btnClose.addEventListener('click', () => act('close'));
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') act('close');
+      });
+
+      setTimeout(fillToViewport, 80);
+      window.addEventListener('resize', () => {
+        setTimeout(fillToViewport, 60);
+      });
+      setInterval(tick, 12);
+      pullLive();
+      pullMetrics();
+      setInterval(pullLive, 120);
+      setInterval(pullMetrics, 2400);
+    </script>
+  </body>
+</html>

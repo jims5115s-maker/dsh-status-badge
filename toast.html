@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Status</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      body {
+        display: flex;
+        align-items: center;
+      }
+      .card {
+        display: flex;
+        gap: 10px;
+        width: 100%;
+        margin: 0 6px;
+        padding: 12px 14px 13px;
+        box-sizing: border-box;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: linear-gradient(180deg, #1b1e23, #14161a);
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
+        animation: slide 0.22s ease-out;
+      }
+      @keyframes slide {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #4ade80;
+        margin-top: 6px;
+        flex: none;
+        box-shadow: 0 0 8px rgba(74, 222, 128, 0.9);
+      }
+      .tt {
+        font-size: 13px;
+        font-weight: 600;
+        color: #e8eaed;
+        margin-bottom: 3px;
+      }
+      .bd {
+        font-size: 11.5px;
+        color: #9aa0a6;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <span class="dot"></span>
+      <div>
+        <div class="tt" id="t">Status</div>
+        <div class="bd" id="b"></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search);
+        document.getElementById('t').textContent = q.get('title') || 'Status badge';
+        document.getElementById('b').textContent = q.get('body') || '';
+      })();
+    </script>
+  </body>
+</html>
