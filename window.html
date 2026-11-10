@@ -792,6 +792,17 @@
       let paintedFirst = -1;
       let liveEl = null;
       let lastHeight = 0;
+      // Follow the tail unless the reader scrolled up, and re-follow when the pane
+      // changes height (a long 思考 block squeezes it and would otherwise leave the
+      // view pinned to the oldest rows).
+      let scrollPinned = true;
+      streamBox.addEventListener('scroll', () => {
+        scrollPinned = streamBox.scrollHeight - streamBox.scrollTop - streamBox.clientHeight < 32;
+      }, { passive: true });
+      const streamResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+        if (scrollPinned) streamBox.scrollTop = streamBox.scrollHeight;
+      }) : null;
+      if (streamResize !== null) streamResize.observe(streamBox);
 
       function resetStream() {
         streamBox.replaceChildren();
@@ -800,6 +811,7 @@
         paintedFirst = -1;
         liveEl = null;
         lastHeight = 0;
+        scrollPinned = true;
       }
 
       function paint() {
@@ -846,7 +858,7 @@
           if (cursor !== null) streamBox.appendChild(cursor);
         }
         lastHeight = streamBox.scrollHeight;
-        streamBox.scrollTop = lastHeight;
+        if (scrollPinned) streamBox.scrollTop = lastHeight;
       }
 
       function fmtBytes(bytes) {
